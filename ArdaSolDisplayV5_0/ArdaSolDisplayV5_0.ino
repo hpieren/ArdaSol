@@ -5,7 +5,7 @@
 */
 
 #define Version "V5.0"
-#define Release "R9"
+#define Release "R10"
 
 /*
 Version: 5.0
@@ -1013,8 +1013,8 @@ void setup()
 // **************************************************************
 // Switched OFF
 
-// writePersistentEnergyTotal(5775000);   			   //total 5775 kWh value dated 11.12.2013 14:45
-// writePersistentEmonEnergyTotal(2978300);  			  // total 2979 kWh value dated 13.12.2013 14:45
+// writePersistentEnergyTotal(536000);   			   //total 536 kWh value dated 13.3.2014 7:45
+// writePersistentEmonEnergyTotal(312000);  			  // total 312 kWh value dated 13.3.2014 7:45
 // writePersistentStartDateEnergyTotal(startOfPVIOperationDate);  //start of PVI operation = 17.8.2012
 
 // Switched OFF
@@ -1075,12 +1075,10 @@ void setup()
   getAmbientTemperature();
   calculateAverageDayEnergy();
   
-  if ((EmonEnergyDayWh - EnergyDay) >= 0) 
-  {
-	EnergyConsFromGridWh = EmonEnergyDayWh - EnergyDay;  //starup compromise!
-	if (EmonEnergyDayWh >0) OldEmonEnergyDayWh = EmonEnergyDayWh;
-	if (EnergyDay >0) OldEnergyDayWh = EnergyDay; 
-  }
+  if (EmonEnergyDayWh > EnergyDay) EnergyConsFromGridWh = EmonEnergyDayWh - EnergyDay;  //starup compromise 1 !
+  if  (EnergyDay > EmonEnergyDayWh) EnergyConsFromGridWh = EmonEnergyDayWh/2;  //starup compromise 2 !
+  OldEmonEnergyDayWh = EmonEnergyDayWh;
+  OldEnergyDayWh = EnergyDay; 
   
   calculateEnergyBalance();
   
