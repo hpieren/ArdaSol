@@ -3,8 +3,8 @@
   A r d a S o l   Project
 ----------------------------
 
-Version: 5.0
-Version Date: 10.12.2013
+Version: 8.1
+Version Date: 7.1.2015
 
 Creation Date: 10.5.2013
 Author: Heinz Pieren
@@ -60,6 +60,28 @@ Example: Response to above request
 -- State = 0 ?
 */
 
+// ArdaMeteo command definitions
+
+#define meteoadr            4           // adress of meteo station
+
+#define cmdInstWindData	  			0x3B01		//instantaneous Wind Speed and Direction
+#define cmdAvr2MinWindData	  		0x3B02		//average last 2 minutes Wind Speed and Direction
+#define cmdPast10MinWindGustData	0x3B03		// past 10 minutes Wind Gust Speed and Direction
+#define cmdDayWindGustData	  		0x3B04		//peak in day Wind Gust Speed and Direction
+#define cmdRainData			  		0x3B05		//in last hour and total day
+#define cmdAtmosPressureData		0x3B06		//instantaneous pressure
+#define cmdLightLevelData			0x3B07		//instantaneous illumination level
+#define cmdTempHumidityData			0x3B08		//instantaneous temperature and rel. humidity
+#define cmdWindChillTempData		0x3B09		//average 2 minutes wind chill temperature
+
+#define cmdWindGen1Data				0x3B10		//simulation of wind generator Type 1 (400W), inst Power Watt daily Energy 1/10 kWh
+#define cmdWindGen2Data				0x3B11		//simulation of wind generator Type 2 (600W), inst Power Watt daily Energy 1/10 kWh
+#define cmdWindGen3Data				0x3B12		//simulation of wind generator Type 3 (1000W), inst Power Watt daily Energy 1/10 kWh
+
+#define cmdResetMeteoValues 		0x3BF0		// resets meto values, daily Energy counters and timers
+
+
+
 // ArdaSol Emon commands definitions
 
 #define emonadr            3
@@ -82,6 +104,13 @@ Example: Response to above request
 #define cmdResetEnergyValue 0x0052	//reset energy total command for ArdaSol Energy Monitor
 
 
+
+unsigned long            ATOK_TimeoutStart;
+const unsigned int       ATOK_MaxWait = 2000;  //max wait time for at ok
+
+static char ATresponse[] = { ' ', ' ', ' ' };
+
+
 static byte CmdBuf[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; // 10 elements
 static byte RecBuf[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; // 8 elements
 
@@ -89,6 +118,89 @@ unsigned long            receiveTimeoutStart;
 const unsigned int       receiveMaxWait = 3000;  //three second max for the answer of the PVI
 
 unsigned int             crc16Checksum;
+
+//**********************************************************************************
+// procedure gets the OK-AT confirmation
+//**********************************************************************************
+
+boolean getXBEE_ATOK()
+{
+boolean recAtOk = false;
+boolean recAtTimeout = false;
+int i;
+
+ATOK_TimeoutStart = millis(); //set timeout start value
+for (i=0; i < sizeof(ATresponse); i++) ATresponse[i]='n';
+i=0;
+  
+  do            // the receive loop with timeout function
+  {
+    if (Serial3.available()) 
+        {
+          ATresponse[i] = Serial3.read();
+          //Serial.print(ATresponse[i]);
+          ++i;
+        }
+    if ((millis() - ATOK_TimeoutStart) > ATOK_MaxWait) recAtTimeout = true;
+	
+	if (someOneIsHere()) displayData = true;  //check the state if the IR sensor
+	
+  } while ((i < sizeof(ATresponse)) && (recAtTimeout == false));
+  
+if (!recAtTimeout) 
+  {
+    if ((ATresponse[0] == 'O')&&(ATresponse[1] == 'K')&&(ATresponse[2] == '\r')) recAtOk = true ;
+    else Serial.println("NoAtOk");  // Serial.println(logMsgRecAtNoOkErr);
+  }
+   else Serial.println("ATOkTimeout");   //else writeLogData(logMsgRecATOkTimeout);
+  
+   Serial.print((millis() - ATOK_TimeoutStart));
+   Serial.print("ms:");
+   Serial.print(ATresponse[0]);
+   Serial.println(ATresponse[1]);
+
+return (recAtOk);
+}
+
+
+//**********************************************************************************
+// procedure Set XBEE Destination Address to a desired value
+// Returns true when Address changed confirmed by the XBEE module
+//**********************************************************************************
+
+
+
+boolean setXBEEdestadr(const char * cmdDLadr)
+{
+  boolean atcmdOk = false;
+  byte XBRecDAT;
+  
+  while (Serial3.available() > 0) XBRecDAT=Serial3.read();	//flush receive buffer
+  XBEEAddress=NONE;		
+  
+  // I asume that at least one second, no communication has been done to the XBEE module
+  
+  Serial3.write(startATmode);		//set XBEE coordinator to AT command mode
+  
+  atcmdOk=getXBEE_ATOK();
+  
+  if (atcmdOk) 
+	{	
+		Serial3.write(cmdDLadr);  //set new Destination Low Address
+		atcmdOk=getXBEE_ATOK();
+	}	
+  
+  if (atcmdOk) 
+	{
+		Serial3.write(exitATmode);
+		atcmdOk=getXBEE_ATOK();
+	}
+  
+	Serial.println(cmdDLadr);
+	
+  return(atcmdOk);
+}
+
 
 //-----------------------------------------------------------------------
 //-----------------------------------------------------------------------
@@ -128,6 +240,315 @@ unsigned int uiCrc16Cal (byte * buf, byte length)
       crc = ~crc;
 
       return (crc);
+}
+
+//-----------------------------------------------------------------------
+// Sends the Reset command and gets confirmation
+
+void getMeteoDayResetConfirmation()
+{
+
+int resConf;
+  
+CmdBuf[0] = meteoadr;      //RS485 chain / XBEE address of meteo station
+CmdBuf[1] = highByte(cmdResetMeteoValues);
+CmdBuf[2] = lowByte(cmdResetMeteoValues);
+
+CmdBuf[6] = 0;		// no second parameter
+CmdBuf[7] = 0;
+
+
+crc16Checksum = uiCrc16Cal (CmdBuf, 8) ;
+CmdBuf[8] = lowByte(crc16Checksum); 
+CmdBuf[9] = highByte(crc16Checksum); 
+                
+sendRequest();
+
+if (receiveAnswer()) 
+    { 
+	  Gen3Power = RecBuf[2];
+	  Gen3Power = Gen3Power << 8;
+      Gen3Power = Gen3Power | RecBuf[3];	//inst power produced in watt
+		
+      resConf = RecBuf[4];			
+	  resConf = resConf << 8;
+      resConf = resConf | RecBuf[5]; 	//confirmation if reset done
+	  
+	  if (resConf == 0xFF) dailyMeteoDataReset=false;
+	 
+    }
+}
+
+
+//-----------------------------------------------------------------------
+// Sends the command get data of wind generator 3 (1kW)
+
+void getWindGen3()
+{
+  
+CmdBuf[0] = meteoadr;      //RS485 chain / XBEE address of meteo station
+CmdBuf[1] = highByte(cmdWindGen3Data);
+CmdBuf[2] = lowByte(cmdWindGen3Data);
+
+CmdBuf[6] = 0;		// no second parameter
+CmdBuf[7] = 0;
+
+
+crc16Checksum = uiCrc16Cal (CmdBuf, 8) ;
+CmdBuf[8] = lowByte(crc16Checksum); 
+CmdBuf[9] = highByte(crc16Checksum); 
+                
+sendRequest();
+
+if (receiveAnswer()) 
+    { 
+	  Gen3Power = RecBuf[2];
+	  Gen3Power = Gen3Power << 8;
+      Gen3Power = Gen3Power | RecBuf[3];	//inst power produced in watt
+		
+      Gen3Energy = RecBuf[4];			
+	  Gen3Energy = Gen3Energy << 8;
+      Gen3Energy = Gen3Energy | RecBuf[5]; 	// energy produced in 1/10 kWh
+	 
+    }
+}
+
+
+//-----------------------------------------------------------------------
+// Sends the command get temperature and humidity
+
+void getMeteoLight()
+{
+  
+CmdBuf[0] = meteoadr;      //RS485 chain / XBEE address of meteo station
+CmdBuf[1] = highByte(cmdLightLevelData);
+CmdBuf[2] = lowByte(cmdLightLevelData);
+
+CmdBuf[6] = 0;		// no second parameter
+CmdBuf[7] = 0;
+
+
+crc16Checksum = uiCrc16Cal (CmdBuf, 8) ;
+CmdBuf[8] = lowByte(crc16Checksum); 
+CmdBuf[9] = highByte(crc16Checksum); 
+                
+sendRequest();
+
+if (receiveAnswer()) 
+    { 
+	  MeteoEnergyWriteCounter = RecBuf[2];
+	  MeteoEnergyWriteCounter = MeteoEnergyWriteCounter << 8;
+      MeteoEnergyWriteCounter = MeteoEnergyWriteCounter | RecBuf[3];	//EEPROM write cycles (Energy values)
+		
+      LightLevel = RecBuf[4];			
+	  LightLevel = LightLevel << 8;
+      LightLevel = LightLevel | RecBuf[5]; 	// light level 1/10 of Lux
+	 
+    }
+}
+
+
+
+
+//-----------------------------------------------------------------------
+// Sends the command get temperature and humidity
+
+void getMeteoHumidity()
+{
+  
+CmdBuf[0] = meteoadr;      //RS485 chain / XBEE address of meteo station
+CmdBuf[1] = highByte(cmdTempHumidityData);
+CmdBuf[2] = lowByte(cmdTempHumidityData);
+
+CmdBuf[6] = 0;		// no second parameter
+CmdBuf[7] = 0;
+
+
+crc16Checksum = uiCrc16Cal (CmdBuf, 8) ;
+CmdBuf[8] = lowByte(crc16Checksum); 
+CmdBuf[9] = highByte(crc16Checksum); 
+                
+sendRequest();
+
+if (receiveAnswer()) 
+    { 
+	  MeteoTemp = RecBuf[2];
+	  MeteoTemp = MeteoTemp << 8;
+      MeteoTemp = MeteoTemp | RecBuf[3];	//outside temperature 1/10 degree celsius
+		
+      Humidity = RecBuf[4];			
+	  Humidity = Humidity << 8;
+      Humidity = Humidity | RecBuf[5]; 	// air humidity in 1/10 of percent
+	 
+    }
+}
+
+
+//-----------------------------------------------------------------------
+// Sends the command get the windchill temperature
+
+void getWindChillTemperature()
+{
+  
+CmdBuf[0] = meteoadr;      //RS485 chain / XBEE address of meteo station
+CmdBuf[1] = highByte(cmdWindChillTempData);
+CmdBuf[2] = lowByte(cmdWindChillTempData);
+
+CmdBuf[6] = 0;		// no second parameter
+CmdBuf[7] = 0;
+
+
+crc16Checksum = uiCrc16Cal (CmdBuf, 8) ;
+CmdBuf[8] = lowByte(crc16Checksum); 
+CmdBuf[9] = highByte(crc16Checksum); 
+                
+sendRequest();
+
+if (receiveAnswer()) 
+    { 
+	  		
+      WindChillTemp = RecBuf[4];			
+	  WindChillTemp = WindChillTemp << 8;
+      WindChillTemp = WindChillTemp | RecBuf[5]; 	// windchill temperature
+	 
+    }
+}
+
+
+
+//-----------------------------------------------------------------------
+// Sends the command get atmospheric pressure
+
+void getMeteoBaro()
+{
+  
+CmdBuf[0] = meteoadr;      //RS485 chain / XBEE address of meteo station
+CmdBuf[1] = highByte(cmdAtmosPressureData);
+CmdBuf[2] = lowByte(cmdAtmosPressureData);
+
+CmdBuf[6] = 0;		// no second parameter
+CmdBuf[7] = 0;
+
+
+crc16Checksum = uiCrc16Cal (CmdBuf, 8) ;
+CmdBuf[8] = lowByte(crc16Checksum); 
+CmdBuf[9] = highByte(crc16Checksum); 
+                
+sendRequest();
+
+if (receiveAnswer()) 
+    { 
+	
+	  BaroDeltaDay = RecBuf[2];
+	  BaroDeltaDay = BaroDeltaDay << 8;
+      BaroDeltaDay = BaroDeltaDay | RecBuf[3];	//delta pressure rel. to start day pressure in pascal
+		
+      Baro = RecBuf[4];			
+	  Baro = Baro << 8;
+      Baro = Baro | RecBuf[5]; 	// Barometric pressure in Hecto-Pascal
+	  
+    }
+}
+
+
+//-----------------------------------------------------------------------
+// Sends the command get rain data
+
+void getMeteoRain()
+{
+  
+CmdBuf[0] = meteoadr;      //RS485 chain / XBEE address of meteo station
+CmdBuf[1] = highByte(cmdRainData);
+CmdBuf[2] = lowByte(cmdRainData);
+
+CmdBuf[6] = 0;		// no second parameter
+CmdBuf[7] = 0;
+
+
+crc16Checksum = uiCrc16Cal (CmdBuf, 8) ;
+CmdBuf[8] = lowByte(crc16Checksum); 
+CmdBuf[9] = highByte(crc16Checksum); 
+                
+sendRequest();
+
+if (receiveAnswer()) 
+    { 
+	  Rain1h = RecBuf[2];
+	  Rain1h = Rain1h << 8;
+      Rain1h = Rain1h | RecBuf[3];	//Rain in last hour in 1/100 of mm
+		
+      RainDay = RecBuf[4];			
+	  RainDay = RainDay << 8;
+      RainDay = RainDay | RecBuf[5]; // total rain in day in 1/100 of mm
+	 
+    }
+}
+
+
+//-----------------------------------------------------------------------
+// Sends the command get average 2 minutes wind data
+
+void getMeteoAvr2MinWind()
+{
+  
+CmdBuf[0] = meteoadr;      //RS485 chain / XBEE address of meteo station
+CmdBuf[1] = highByte(cmdAvr2MinWindData);
+CmdBuf[2] = lowByte(cmdAvr2MinWindData);
+
+CmdBuf[6] = 0;		// no second parameter
+CmdBuf[7] = 0;
+
+
+crc16Checksum = uiCrc16Cal (CmdBuf, 8) ;
+CmdBuf[8] = lowByte(crc16Checksum); 
+CmdBuf[9] = highByte(crc16Checksum); 
+                
+sendRequest();
+
+if (receiveAnswer()) 
+    { 
+	  WindSpeed = RecBuf[2];		
+	  WindSpeed = WindSpeed << 8;
+      WindSpeed = WindSpeed | RecBuf[3];	// Average 2 minutes wind speed in mm/s
+		
+      WindDir = RecBuf[4];			
+	  WindDir = WindDir << 8;
+      WindDir = WindDir | RecBuf[5];		// Average 2 minutes wind direction 0-360 degrees
+	 
+    }
+}
+
+//-----------------------------------------------------------------------
+// Sends the command get day wind gust data
+
+void getMeteoDayWindGust()
+{
+  
+CmdBuf[0] = meteoadr;      //RS485 chain / XBEE address of meteo station
+CmdBuf[1] = highByte(cmdDayWindGustData);
+CmdBuf[2] = lowByte(cmdDayWindGustData);
+
+CmdBuf[6] = 0;		// no second parameter
+CmdBuf[7] = 0;
+
+
+crc16Checksum = uiCrc16Cal (CmdBuf, 8) ;
+CmdBuf[8] = lowByte(crc16Checksum); 
+CmdBuf[9] = highByte(crc16Checksum); 
+                
+sendRequest();
+
+if (receiveAnswer()) 
+    { 
+	  WindGustSpeed = RecBuf[2];		
+	  WindGustSpeed = WindGustSpeed << 8;
+      WindGustSpeed = WindGustSpeed | RecBuf[3];	// day wind gust speed in mm/s
+		
+      WindGustDir = RecBuf[4];			
+	  WindGustDir = WindGustDir << 8;
+      WindGustDir = WindGustDir | RecBuf[5];		// day wind gust direction 0-360 degrees
+	 
+    }
 }
 
 //-----------------------------------------------------------------------
@@ -351,12 +772,17 @@ if (receiveAnswer())
 unsigned long Epvi;
 
 	Epvi = getReceivedValueAsInt(); 
-	if (Epvi < 40000) EnergyDay=Epvi;		//validate <40kWh in a day
+	if (Epvi < 40000) 	//validate <40kWh in a day
+		{ 
+			EnergyDay = Epvi;		
+			writeToRTCLong(EnergyDayRTCAdr,EnergyDay);
+		}
 }
 }
 
 //-----------------------------------------------------------------------
 // Sends the command get the total cumulated
+// no more used at the moment
 
 void getEnergyTotal()
 {
@@ -485,6 +911,9 @@ boolean receiveAnswer()
           ++i;
         }
     if ((millis() - receiveTimeoutStart) > receiveMaxWait) recTimeout = true;
+	
+	if (someOneIsHere()) displayData = true;  //check the state if the IR sensor
+	
   } while ((i < sizeof(RecBuf)) && (recTimeout == false));
   
   if (!recTimeout) 
@@ -493,7 +922,15 @@ boolean receiveAnswer()
     if (recCRC == uiCrc16Cal (RecBuf, 6)) recOk = true ;
     else Serial.println(logMsgRecChkSumErr);
   }
-  else writeLogData(logMsgRecTimeout);
+  else 
+  {
+	//Serial.print("XBEEAddress=");
+	//Serial.println(XBEEAddress);
+	if ( XBEEAddress == REMOTE) writeLogData(logMsgRecTimeoutRemote);
+	else if ( XBEEAddress == EMON) writeLogData(logMsgRecTimeoutEmon);
+	else if ( XBEEAddress == METEO) writeLogData(logMsgRecTimeoutMeteo);
+	else writeLogData(logMsgRecTimeout);
+  }
 
 return (recOk);
 }

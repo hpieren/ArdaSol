@@ -4,10 +4,16 @@ ArdaSol Solar Data Management
 ---------------------------------------
 */
 
-#define Version "V2.0 "
-#define Release "R3"
+#define Version "V3.0 "
+#define Release "R0"
 
 /*
+Version: 3.0
+Creation Date: 4.12.2014
+Author: Heinz Pieren
+XBEE-Arduino Receive Buffer Flow Control inserted while updating serial 7-Digit Display
+RTS Signal to XBEE transmit buffer for holding data during 7-Segement 4 Digit display update
+
 Version: 2.0
 Creation Date: 12.11.2013
 Author: Heinz Pieren
@@ -30,7 +36,7 @@ EnergyMonitor emon1;                   // Create an instance
 #include <SoftwareSerial.h>
 SoftwareSerial DisplaySerial(8, 7); // RX, TX
 SoftwareSerial XBeeSerial(10, 11);    // RX TX
-#define rtsXBeePin 6               // RTS Signaling LED
+#define rtsXBeePin 9               // RTS Signaling LED
 
 //Pin connected to ST_CP of 74HC595
 const byte latchPin=2;
@@ -50,7 +56,9 @@ boolean ledRedState;
 
 #define logMessageFlushXBeeRecBuf    "*E1:FlushXBeeRB x="
 #define logMessageXBeeRecChkSumErr   "*E2:XBeeChkSumErr"
-#define logMessageXBeeRecTimeout     "*E3:XBeeRecTimeout"
+#define logMessageXBeeRecTimeout     "*E3:XBeeRecTimeout "
+
+#define logMessageXBeeRecCmdOk       "*D1:XBeeRecCmdOk "
 
 // 7 segment display commands
 
@@ -81,6 +89,11 @@ const unsigned long      energyMeasureStoreRate = 15*60000;  //every 15 minutes 
 															// when:
 const int 				 deltaStoreValue = 10;   			// at least 1kWh (=10 kWh-Zehntel) must be cumulated for storing in EEPROM
 int						 writePersistentCounter = 0;		// counts the write cycles
+
+long            		measureGPStartTime;
+long            		measureGPEndTime;
+
+byte					NoOfBytesReceived;
 
 byte                     displayState;
 
@@ -326,19 +339,64 @@ boolean CommandPacketReceived()
     if ((!cmdTimeout) && (i == cmdSize)) 
     {
       cmdCRC = CommandBuf[8] + (CommandBuf[9] << 8);
-      if (cmdCRC == uiCrc16Cal (CommandBuf, 8)) cmdOk = true ;
+      if (cmdCRC == uiCrc16Cal (CommandBuf, 8)) 
+		{
+			cmdOk = true ;
+			Serial.print(sequenceCounter);		// counts the seconds
+			Serial.print(';');
+			Serial.print(logMessageXBeeRecCmdOk);
+			Serial.print(';');
+			Serial.print(NoOfBytesReceived);		// on first available request after power measurement
+			Serial.print(';');
+			Serial.print(i);						// bytes actually red within time-out period
+			Serial.print(';');
+			Serial.print((measureGPEndTime-measureGPStartTime)); // time used for measuring grid power values
+			Serial.print(';');
+			for (byte k=0; k<i; k++)
+			{
+				Serial.print(CommandBuf[k],HEX );
+				Serial.print(';');
+			}
+			Serial.println();
+		}
       else 
-          {
-            Serial.print(sequenceCounter);
-            Serial.print(':');
-            Serial.println(logMessageXBeeRecChkSumErr);
-          }
+		{
+			Serial.print(sequenceCounter);		// counts the seconds
+			Serial.print(';');
+			Serial.print(logMessageXBeeRecChkSumErr);
+			Serial.print(';');
+			Serial.print(NoOfBytesReceived);		// on first available request after power measurement
+			Serial.print(';');
+			Serial.print(i);						// bytes actually red within time-out period
+			Serial.print(';');
+			Serial.print((measureGPEndTime-measureGPStartTime)); // time used for measuring grid power values
+			Serial.print(';');
+			for (byte k=0; k<i; k++)
+			{
+				Serial.print(CommandBuf[k],HEX );
+				Serial.print(';');
+			}
+			Serial.println();
+		}
     }
     else 
         {
-          Serial.print(sequenceCounter);
-          Serial.print(':');
-          Serial.println(logMessageXBeeRecTimeout); 
+          Serial.print(sequenceCounter);		// counts the seconds
+          Serial.print(';');
+          Serial.print(logMessageXBeeRecTimeout);
+		  Serial.print(';');
+		  Serial.print(NoOfBytesReceived);		// on first available request after power measurement
+		  Serial.print(';');
+		  Serial.print(i);						// bytes actually red within time-out period
+          Serial.print(';');
+		  Serial.print((measureGPEndTime-measureGPStartTime)); // time used for measuring grid power values
+		  Serial.print(';');
+		  for (byte k=0; k<i; k++)
+		  {
+			Serial.print(CommandBuf[k],HEX );
+			Serial.print(';');
+		  }
+		  Serial.println();
         }
         
   }  // end of while !cmdOk
@@ -637,6 +695,9 @@ void displayPowerValuesLocal()
 
 {
   char sevenSegmentLEDLine[10]; //Used for sprintf
+  
+  digitalWrite(rtsXBeePin, HIGH);		// Disable Date Receive from XBEE
+  delay(10);							// stay on save side
 
   digitalWrite(ledRed, LOW);
   ledRedState=false;
@@ -701,7 +762,7 @@ void displayPowerValuesLocal()
   ++displayState;
   displayState = displayState % 4;
   
- 
+  digitalWrite(rtsXBeePin, LOW);		// Enable Date Receive from XBEE
 }
 
 
@@ -759,7 +820,9 @@ void writeLogData()
 
 {
   
-  Serial.print("Urms=");
+  Serial.print("SAvail=");
+  Serial.print(NoOfBytesReceived);		// on first available request after power measurement
+  Serial.print(";Urms=");
   Serial.print(supplyVoltage);
   Serial.print(";Uigv=");
   Serial.print(instGridVolts);
@@ -806,9 +869,13 @@ void setup()
   Serial.begin(115200);
   DisplaySerial.begin(9600);
   
+ 
+  pinMode(rtsXBeePin, OUTPUT); 
+  digitalWrite(rtsXBeePin, HIGH);		// Disable Date Receive from XBEE
+  delay(10);  							// stay on save side
+  
   XBeeSerial.begin(19200);
   XBeeSerial.listen();
-  pinMode(rtsXBeePin, OUTPUT); 
   
   pinMode(ledRed,OUTPUT);
   pinMode(ledGreen, OUTPUT);
@@ -876,6 +943,7 @@ void setup()
   Serial.print("persistent Ws = ");
   Serial.println(dailyEnergyConsumption_Ws);
   
+  digitalWrite(rtsXBeePin, LOW);		// Enable Date Receive from XBEE
   
  }
 
@@ -889,7 +957,9 @@ void loop()
 	   
   if ((millis() - gridMeasureStartWait) > gridMeasureWait)   // when no command packets are comming
      {
+	   measureGPStartTime = millis();
        measureGridPower();
+	   measureGPEndTime = millis();
      }     
   
   dxTime_ms=(millis() - energyMeasureLastStart);
@@ -897,8 +967,9 @@ void loop()
 	{
 		calculateDailyEnergyCons();		
 	}
-	
-  if (XBeeSerial.available())
+
+  NoOfBytesReceived = XBeeSerial.available();	
+  if (NoOfBytesReceived > 0)
      { 
         gridMeasureStartWait= millis();
         if (CommandPacketReceived())    SendResponseFromEmon(); 

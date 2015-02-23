@@ -3,8 +3,8 @@
   A r d a S o l   Project
 ----------------------------
 
-Version: 5.0
-Version Date: 10.12.2013
+Version: 8.1
+Version Date: 7.1.2015
 
 Creation Date: 10.5.2013
 Author: Heinz Pieren
@@ -708,6 +708,58 @@ for (byte i=0; i < strlen(L2); i++) ht1632_putchar(i*6  + L2_Ofs, 9, L2[i], GREE
 
 //------------------------------------------------------------------
 
+void displayBalancePower(int balpower )
+
+{
+     const byte POf11 = 10;  // 1 Digit
+      const byte POf12 = 7;   // 2 Digits
+      const byte POf13 = 4;   // 3 Digits
+      const byte POf14 = 1;   // 4 Digits
+	  
+      const byte POf2 = 4;
+	  
+	  int absBP;
+	  byte color;
+
+absBP=abs(balpower);
+
+snprintf (L1, LLen, "%dW",absBP); 
+	  
+if (balpower < 0) 
+	{
+		snprintf (L2, LLen, "-Bal");
+		color = RED;
+	}
+else if (balpower == 0)
+	{
+		snprintf (L2, LLen, " Bal");
+		color = ORANGE;
+	}
+else 
+	{
+		snprintf (L2, LLen, "+Bal");
+		color = ORANGE;
+	}
+
+if (absBP < 10) L1_Ofs = POf11;
+else if (absBP < 100) L1_Ofs = POf12;
+else if (absBP < 1000) L1_Ofs = POf13;
+else L1_Ofs = POf14;
+
+
+byte len1 = strlen(L1);
+
+for (byte i=0; i < len1-1; i++) ht1632_putchar(i*6  + L1_Ofs, 0, L1[i], color);
+ht1632_putchar((len1-1)*6  + L1_Ofs +1, 0, L1[len1-1], GREEN);
+
+L2_Ofs = POf2;
+  
+for (byte i=0; i < strlen(L2); i++) ht1632_putchar(i*6  + L2_Ofs, 9, L2[i], color);
+
+}
+
+//------------------------------------------------------------------
+
 void displayEnergyDayCons(unsigned long denergydayused )  // energy in Wh
 
 {
@@ -997,15 +1049,18 @@ ht1632_putchar(27 + L2_Ofs, 9, L2[5], GREEN);
 void displayEnergyTotalPro(unsigned long denergytotal )  // energy in kilowatthours
 
 {
-      const byte ETOf14 = 5; // 4 Digits
+      const byte ETOf12 = 9; // 2 Digits
+	  const byte ETOf13 = 7; // 3 Digits
+	  const byte ETOf14 = 5; // 4 Digits
       const byte ETOf15 = 1; // 5 Digits
       const byte ETOf2  = 0;
 
 snprintf (L1, LLen, "%ld",denergytotal);      
 snprintf (L2, LLen, "kWhToP");
       
-
-if (denergytotal < 10000) L1_Ofs = ETOf14;
+if (denergytotal < 100) L1_Ofs = ETOf12;
+else if (denergytotal < 1000) L1_Ofs = ETOf13;
+else if (denergytotal < 10000) L1_Ofs = ETOf14;
 else L1_Ofs = ETOf15;  
 
 byte len1 = strlen(L1);
@@ -1032,6 +1087,8 @@ void displayEnergyAverageDayPro(unsigned long denergyday )  // energy in watthou
       
       unsigned long kWh;
       unsigned int oneTenth_kWh;
+	  
+
       
 kWh = denergyday / 1000;
 oneTenth_kWh = (denergyday % 1000) / 100;
@@ -1073,6 +1130,338 @@ ht1632_putchar(11 + L2_Ofs, 9, L2[2], GREEN);
 ht1632_putchar(17 + L2_Ofs, 9, L2[3], GREEN);
 ht1632_putchar(22 + L2_Ofs, 9, L2[4], GREEN);
 ht1632_putchar(27 + L2_Ofs, 9, L2[5], GREEN);
+
+}
+
+
+//------------------------------------------------------------------
+
+void displayMeteoWind(unsigned int speed, unsigned int dir)  //wind speed and direction
+
+{
+      const byte EOf11 = 12;   // 1 Digits
+	  const byte EOf12 = 9;   // 2 Digits
+      const byte EOf13 = 6;   // 3 Digits
+	  
+      const byte EOf2  = 0;
+      
+      unsigned int kmh;
+	  
+	  int i;
+	  int cx;
+
+	  
+kmh = speed / 10;
+if ((speed % 10) > 4) ++kmh;
+
+
+snprintf (L1, LLen, "%d",kmh);      
+
+i=0;
+cx=snprintf (L2, LLen, "km/h");
+i=i+cx;    
+
+
+	if ((dir < 23) || (dir >  337)) snprintf (L2+i, LLen-i, "N ");  // North
+	else if (dir < 68) snprintf (L2+i, LLen-i, "NE");  // North-East
+	else if (dir < 113) snprintf (L2+i, LLen-i, "E ");  // East
+	else if (dir < 158) snprintf (L2+i, LLen-i, "SE");  // South-East
+	else if (dir < 203) snprintf (L2+i, LLen-i, "S ");  // South
+	else if (dir < 248) snprintf (L2+i, LLen-i, "SW");  // South-West
+	else if (dir < 293) snprintf (L2+i, LLen-i, "W ");  // West
+	else if (dir < 338) snprintf (L2+i, LLen-i, "NW");  // North-East
+	else snprintf (L2+i, LLen-i, "  "); 
+
+	
+if (kmh < 10) L1_Ofs = EOf11;
+else if (kmh < 100) L1_Ofs = EOf12;
+else L1_Ofs = EOf13;
+	
+byte len1 = strlen(L1);
+for (byte i=0; i < len1; i++) ht1632_putchar(i*6  + L1_Ofs, 0, L1[i], ORANGE);	
+
+	
+L2_Ofs = EOf2;
+ht1632_putchar(0  + L2_Ofs, 9, L2[0], GREEN);
+ht1632_putchar(5  + L2_Ofs, 9, L2[1], GREEN);
+ht1632_putchar(10 + L2_Ofs, 9, L2[2], GREEN);
+ht1632_putchar(14 + L2_Ofs, 9, L2[3], GREEN);
+ht1632_putchar(21 + L2_Ofs, 9, L2[4], ORANGE);
+ht1632_putchar(27 + L2_Ofs, 9, L2[5], ORANGE);
+
+
+}
+
+//------------------------------------------------------------------
+
+void displayMeteoWindGust(unsigned int speed)  //wind gust speed
+
+{
+      const byte EOf11 = 12;   // 1 Digits
+	  const byte EOf12 = 9;   // 2 Digits
+      const byte EOf13 = 6;   // 3 Digits
+	  
+      const byte EOf2  = 0;
+      
+      unsigned int kmh;
+	  
+	  
+kmh = speed / 10;
+if ((speed % 10) > 4) ++kmh;
+
+
+snprintf (L1, LLen, "%d",kmh);      
+snprintf (L2, LLen, "km/hPk");
+    
+	
+if (kmh < 10) L1_Ofs = EOf11;
+else if (kmh < 100) L1_Ofs = EOf12;
+else L1_Ofs = EOf13;
+	
+byte len1 = strlen(L1);
+for (byte i=0; i < len1; i++) ht1632_putchar(i*6  + L1_Ofs, 0, L1[i], ORANGE);	
+
+	
+L2_Ofs = EOf2;
+ht1632_putchar(0  + L2_Ofs, 9, L2[0], GREEN);
+ht1632_putchar(5  + L2_Ofs, 9, L2[1], GREEN);
+ht1632_putchar(10 + L2_Ofs, 9, L2[2], GREEN);
+ht1632_putchar(14 + L2_Ofs, 9, L2[3], GREEN);
+ht1632_putchar(21 + L2_Ofs, 9, L2[4], RED);
+ht1632_putchar(27 + L2_Ofs, 9, L2[5], RED);
+
+
+}
+
+//------------------------------------------------------------------
+
+void displayMeteoTempHum(int temp, unsigned int hum )
+
+{
+    const byte TOf11 = 3;    // one digit temperature
+    const byte TOf12 = 6;    //two digits temperature
+    const byte TOf2 = 6;
+	
+	 int i;
+     int cx;
+	 int h;
+	 int t;
+    
+	t = temp/10;
+	if ((temp % 10) > 4) ++t;
+	
+	
+    if ((t >= 0) && (t < 10)) L1_Ofs = TOf11;
+    else L1_Ofs = TOf12;
+    
+    L2_Ofs = TOf2;    
+    
+    if ((t < -9) || (t > 99)) snprintf (L1, LLen, "  ");
+    else   snprintf (L1, LLen,"%d",t);
+    
+    i=strlen(L1);
+	
+	snprintf (L1+i, LLen-i,"%cC",char(96));  // degree sign
+    
+	h = hum/10;
+	if ((hum % 10) > 4) ++h;
+	
+	snprintf (L2, LLen,"%d%c",h,char(37));  //percent sign
+	
+  
+    byte x;
+    if ((t >= 0) && (t < 10)) x=1;
+    else 
+      {
+      x=0;
+      ht1632_putchar(0  + L1_Ofs, 0, L1[0], RED);   // temperature
+      }
+    
+    
+    ht1632_putchar(0  + L1_Ofs, 0, L1[0-x], RED);    // temperature
+    ht1632_putchar(6  + L1_Ofs, 0, L1[1-x], RED);
+    ht1632_putchar(11 + L1_Ofs, 0, L1[2-x], RED);
+    ht1632_putchar(15 + L1_Ofs, 0, L1[3-x], RED);
+    
+    ht1632_putchar(0  + L2_Ofs, 9, L2[0], ORANGE);            //humidity
+    ht1632_putchar(6  + L2_Ofs, 9, L2[1], ORANGE);
+    ht1632_putchar(12 + L2_Ofs, 9, L2[2], ORANGE);
+   
+
+}  
+
+//------------------------------------------------------------------
+
+void displayWindChillTemp(int temp)
+
+{
+    const byte TOf11 = 3;    // one digit temperature
+    const byte TOf12 = 6;    //two digits temperature
+    const byte TOf2 = 0;
+	
+	 int i;
+	 int t;
+    
+	t = temp/10;
+	if ((temp % 10) > 4) ++t;
+	
+	
+    if ((t >= 0) && (t < 10)) L1_Ofs = TOf11;
+    else L1_Ofs = TOf12;
+    
+    if ((t < -9) || (t > 99)) snprintf (L1, LLen, "  ");
+    else   snprintf (L1, LLen,"%d",t);
+    
+    i=strlen(L1);
+	
+	snprintf (L1+i, LLen-i,"%cC",char(96));  // degree sign
+	
+	L2_Ofs = TOf2;    
+	snprintf (L2, LLen, "WChill");
+	
+  
+    byte x;
+    if ((t >= 0) && (t < 10)) x=1;
+    else 
+      {
+      x=0;
+      ht1632_putchar(0  + L1_Ofs, 0, L1[0], RED);   // temperature
+      }
+    
+    
+    ht1632_putchar(0  + L1_Ofs, 0, L1[0-x], RED);    // temperature
+    ht1632_putchar(6  + L1_Ofs, 0, L1[1-x], RED);
+    ht1632_putchar(11 + L1_Ofs, 0, L1[2-x], RED);
+    ht1632_putchar(15 + L1_Ofs, 0, L1[3-x], RED);
+    
+	ht1632_putchar(1  + L2_Ofs, 9, L2[0], GREEN);	//windchill text
+	ht1632_putchar(7  + L2_Ofs, 9, L2[1], GREEN);
+	ht1632_putchar(13 + L2_Ofs, 9, L2[2], GREEN);
+	ht1632_putchar(18 + L2_Ofs, 9, L2[3], GREEN);
+	ht1632_putchar(22 + L2_Ofs, 9, L2[4], GREEN);
+	ht1632_putchar(26 + L2_Ofs, 9, L2[5], GREEN);
+   
+
+}  
+
+
+//------------------------------------------------------------------
+
+void displayMeteoBaro(unsigned int Pascal, int PascalDelta )
+
+{
+      const byte POf11 = 12;  // 1 Digit
+      const byte POf12 = 9;   // 2 Digits
+      const byte POf13 = 6;   // 3 Digits
+      const byte POf14 = 3;   // 4 Digits
+	  
+	  const byte POf21 = 9;   // 1 Digit
+      const byte POf22 = 3;   // 2 Digits
+	  const byte POf23 = 0;   // 3 Digits
+      
+	  int dxPa;
+
+	  
+dxPa=PascalDelta/100;
+
+if (PascalDelta < 0) 
+{	
+	if ((PascalDelta % 100) < -49) --dxPa;
+}
+else 
+{
+	if ((PascalDelta % 100) > 49) ++dxPa;
+}
+
+//Serial.print("dxPa=");
+//Serial.println(dxPa);
+
+snprintf (L1, LLen, "%d",Pascal);
+
+if (dxPa > 0) snprintf (L2, LLen, "+%dhPa",dxPa);
+else snprintf (L2, LLen, "%dhPa",dxPa);
+
+byte len1 = strlen(L1);
+byte len2 = strlen(L2);
+
+if (len1 == 1) L1_Ofs = POf11;
+else if (len1 == 2) L1_Ofs = POf12;
+else if (len1 == 3) L1_Ofs = POf13;
+else L1_Ofs = POf14;
+
+
+for (byte i=0; i < len1; i++) ht1632_putchar(i*6  + L1_Ofs, 0, L1[i], ORANGE);
+//ht1632_putchar((len1-1)*6  + L1_Ofs +1, 0, L1[len1-1], GREEN);
+
+
+
+if (len2==4) 
+    {
+      L2_Ofs = POf21;
+      ht1632_putchar(0 + L2_Ofs, 9, L2[0], ORANGE);
+      ht1632_putchar(6 + L2_Ofs, 9, L2[1], GREEN);
+      ht1632_putchar(12 + L2_Ofs, 9, L2[2], GREEN);
+	  ht1632_putchar(17 + L2_Ofs, 9, L2[3], GREEN);
+    }
+else if (len2==5) 
+    {
+      L2_Ofs = POf22;
+      ht1632_putchar(0  + L2_Ofs, 9, L2[0], ORANGE);
+      ht1632_putchar(6  + L2_Ofs, 9, L2[1], ORANGE);
+      ht1632_putchar(13 + L2_Ofs, 9, L2[2], GREEN);
+      ht1632_putchar(18 + L2_Ofs, 9, L2[3], GREEN);
+	  ht1632_putchar(23 + L2_Ofs, 9, L2[4], GREEN);
+    }
+else 	
+	{
+      L2_Ofs = POf23;
+      ht1632_putchar(0  + L2_Ofs, 9, L2[0], ORANGE);
+      ht1632_putchar(5  + L2_Ofs, 9, L2[1], ORANGE);
+      ht1632_putchar(11 + L2_Ofs, 9, L2[2], ORANGE);
+      ht1632_putchar(17 + L2_Ofs, 9, L2[3], GREEN);
+      ht1632_putchar(22 + L2_Ofs, 9, L2[4], GREEN);
+	  ht1632_putchar(27 + L2_Ofs, 9, L2[5], GREEN);
+    }
+ 
+}
+
+
+//------------------------------------------------------------------
+
+void displayMeteoRain(unsigned int dayr )
+
+{
+      const byte POf11 = 10;  // 1 Digit
+      const byte POf12 = 7;   // 2 Digits
+      const byte POf13 = 1;   // 3 Digits
+	  
+	  const byte POf21 = 1;  
+      
+      unsigned int daymm;
+	  
+	  
+daymm = dayr / 100;
+if ((dayr % 100) > 49) ++daymm;
+
+
+snprintf (L1, LLen, "%dmm",daymm);  
+snprintf (L2, LLen, "dRain");  
+
+
+if (daymm < 10) L1_Ofs = POf11;
+else if (daymm < 100) L1_Ofs = POf12;
+else L1_Ofs = POf13;
+
+L2_Ofs = POf21;
+
+byte len1 = strlen(L1);
+byte len2 = strlen(L2);
+
+for (byte i=0; i < len1-2; i++) ht1632_putchar(i*6  + L1_Ofs, 0, L1[i], ORANGE);
+ht1632_putchar((len1-2)*6  + L1_Ofs +1, 0, L1[len1-2], GREEN);
+ht1632_putchar((len1-1)*6  + L1_Ofs +1, 0, L1[len1-1], GREEN);
+
+for (byte i=0; i < len2; i++) ht1632_putchar(i*6  + L2_Ofs, 9, L2[i], GREEN);
 
 }
 

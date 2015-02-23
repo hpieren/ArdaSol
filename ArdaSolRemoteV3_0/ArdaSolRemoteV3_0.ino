@@ -5,7 +5,7 @@ ArdaSol Photovoltaic Inverter Display
 */
 
 #define Version "V3.0 "
-#define Release "R1"
+#define Release "R2"
 
 /*
 Version: 1.0.0
@@ -52,6 +52,7 @@ SoftwareSerial RS485Serial(rx485Pin, tx485Pin);
 SoftwareSerial XBeeSerial(rxXBeePin, txXBeePin);
 
 #define logMessageStart            "*01:start"
+#define logMessageCmdSeq           "*02:cmdSeq"
 
 #define logMessageFlushXBeeRecBuf    "*E1:FlushXBeeRB x="
 #define logMessageXBeeRecChkSumErr   "*E2:XBeeChkSumErr"
@@ -59,6 +60,8 @@ SoftwareSerial XBeeSerial(rxXBeePin, txXBeePin);
 #define logMessageFlushPVIRecBuf     "*E4:FlushPVIRB x="
 #define logMessagePVIRecChkSumErr    "*E5:PVIChkSumErr"
 #define logMessagePVIRecTimeout      "*E6:PVIRecTimeout"
+
+#define pviadr            2			//address of photovolataic inverter
 
 #define cmdSize 10    // 10 Bytes command Packet
 static byte CommandBuf[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; // 10 elements
@@ -216,7 +219,9 @@ boolean CommandPacketReceived()
         }
         
   }  // end of while !cmdOk
-  
+
+if (cmdOk && (CommandBuf[0] != pviadr)) cmdOk = false;  // this command is not for pvi
+    
 return (cmdOk);
 }
 
@@ -358,9 +363,15 @@ void setup()
 void loop()
 {
 
-if (CommandPacketReceived())    SendCommandPacketToPVI();   // CommandPacketReceived() is waiting until valid packet received
+if (CommandPacketReceived())    
+		{
+			SendCommandPacketToPVI();   // CommandPacketReceived() is waiting until valid packet received
+			if (ResponsePacketReceived())   SendResponsePacketToXBee(); // ResponsePacketReceived() is waiting until valid packet received or timeout occurred                     
 
-if (ResponsePacketReceived())   SendResponsePacketToXBee(); // ResponsePacketReceived() is waiting until valid packet received or timeout occurred
+			Serial.print(sequenceCounter);
+			Serial.print(':');
+			Serial.println(logMessageCmdSeq); 
+		}
 
 sequenceCounter++;
 

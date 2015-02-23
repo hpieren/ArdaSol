@@ -3,8 +3,8 @@
   A r d a S o l   Project
 ----------------------------
 
-Version: 5.0
-Version Date: 10.12.2013
+Version: 8.1
+Version Date: 7.1.2015
 
 Creation Date: 5.6.2013
 Author: Heinz Pieren
@@ -57,7 +57,7 @@ char ssid[] = "NETGEAR";      //  your network SSID (name)
 char pass[] = "faxfog100%";   // your network password
 
 // the IP address for the shield:
-IPAddress WiFiIP(192, 168, 0, 32);    
+IPAddress WiFiIP(192, 168, 0, 64);    //this address is reserved in the netgear router 
 
 
 // initialize the library instance:
@@ -90,6 +90,24 @@ char server[] = "api.xively.com";   // name address for xively API
 #define XivelyCHstateSD            "A_SD"
 #define XivelyCHemonEnergyDayWriteCounter 	"B_WC"
 
+
+#define XivelyCHMeteoBaro            	"M10p"
+#define XivelyCHMeteoBaroDelta       	"M11pd"
+#define XivelyCHMeteoTemp            	"M12t"
+#define XivelyCHMeteoWindchillTemp     	"M12wt"
+#define XivelyCHMeteoHumi            	"M13h"
+#define XivelyCHMeteoWindSpeed          "M14Ws"
+#define XivelyCHMeteoWindDir            "M15Wd"
+#define XivelyCHMeteoWindPeak           "M16Wp"
+
+#define XivelyCHMeteoRainDay            "M17Rd"
+
+#define XivelyCHMeteoGenPower           "M20Pp"
+#define XivelyCHMeteoGenPowerPeak       "M21PpPk"
+#define XivelyCHMeteoGenEnergy          "M22Ep"
+#define XivelyCHMeteoGenEnergyTot       "M23EpTo"
+
+#define XivelyCHMeteoMeteoWriteCounter  "M30WC"
 
 
 
@@ -432,7 +450,246 @@ SendDataRecordToXively();
 
 }
 
+//-----------------------------------------------------------------------
+// Get Valid Meteo Data and send it to xively (Part 1)
+//-----------------------------------------------------------------------
+
+void sendMeteoPart1DataToXively()
+
+{
+
+int x;
+int y;
+int z;
+
+int cx;
+int i;
+
+
+i=0;  // the index of the newDataString
+
   
+// instant Barometric pressure
+// ---------------------------
+	
+	if (Baro > 0)
+	{
+		cx = snprintf (newDataString+i, nDSlen-i, "%s,%d\r\n", XivelyCHMeteoBaro,Baro);
+		i = i+cx;
+	
+
+
+// instant Barometric pressure change since this morning
+// -----------------------------------------------------
+	
+		x=BaroDeltaDay/100;   //delta pressure in pascal
+							// so we have now HektoPascal
+		x=abs(x);
+		y=(BaroDeltaDay % 100)/10; // y has first digit after komma
+		y=abs(y);
+		z=(BaroDeltaDay % 10); // z has second digit after komma
+		z=abs(z);
+		
+		if (BaroDeltaDay>0)
+		{
+			cx = snprintf (newDataString+i, nDSlen-i, "%s,+%d.%d%d\r\n", XivelyCHMeteoBaroDelta,x,y,z);
+			i = i+cx;
+		}
+		else if (BaroDeltaDay==0)
+		{
+			cx = snprintf (newDataString+i, nDSlen-i, "%s,%d.%d%d\r\n", XivelyCHMeteoBaroDelta,x,y,z);
+			i = i+cx;		
+		}
+		else 
+		{
+			cx = snprintf (newDataString+i, nDSlen-i, "%s,-%d.%d%d\r\n", XivelyCHMeteoBaroDelta,x,y,z);
+			i = i+cx;		
+		}
+	
+	}
+
+	
+// temperature
+// -----------
+
+  if ((MeteoTemp < 990) && (MeteoTemp > -200))
+	{
+		x=MeteoTemp/10;   //temperature in 1/10 degree celsius
+							// so we have now degree celsius in x
+		x=abs(x);
+		y=MeteoTemp % 10; // y has one digit after komma
+		y=abs(y);
+		
+		if (MeteoTemp < 0)		//what we dont hope here in south Italy!
+		{
+			cx = snprintf (newDataString+i, nDSlen-i, "%s,-%d.%d\r\n", XivelyCHMeteoTemp,x,y);
+			i = i+cx;
+		}
+		else
+		{
+			cx = snprintf (newDataString+i, nDSlen-i, "%s,%d.%d\r\n", XivelyCHMeteoTemp,x,y);
+			i = i+cx;
+		}
+	}
+
+	
+// humidity
+// --------
+
+  if ((Humidity < 990) && (Humidity > 0))
+	{
+		x=Humidity/10;   //humidity in 1/10 percent
+							// so we have now humidity in percent
+		y=Humidity % 10; // y has one digit after komma
+		
+		cx = snprintf (newDataString+i, nDSlen-i, "%s,%d.%d\r\n", XivelyCHMeteoHumi,x,y);
+		i = i+cx;
+	}
+
+	
+// windchill temperature
+// ---------------------
+
+  if ((WindChillTemp < 990) && (WindChillTemp > -200))
+	{
+		x=WindChillTemp/10;   //temperature in 1/10 degree celsius
+							// so we have now degree celsius in x
+		x=abs(x);
+		y=WindChillTemp % 10; // y has one digit after komma
+		y=abs(y);
+		
+		if (WindChillTemp < 0)		//what we dont hope here in south Italy!
+		{
+			cx = snprintf (newDataString+i, nDSlen-i, "%s,-%d.%d\r\n", XivelyCHMeteoWindchillTemp,x,y);
+			i = i+cx;
+		}
+		else
+		{
+			cx = snprintf (newDataString+i, nDSlen-i, "%s,%d.%d\r\n", XivelyCHMeteoWindchillTemp,x,y);
+			i = i+cx;
+		}
+	}
+
+	
+// average windspeed and direction in last two miunutes
+// ----------------------------------------------------
+
+  if ((WindSpeedkmh < 990) && (WindSpeedkmh >= 0))
+	{
+		x=WindSpeedkmh/10;  //windspeed in 1/10 km/h
+						// so we have speed in km/h
+		y=WindSpeedkmh % 10; // y has one digit after komma
+		
+		cx = snprintf (newDataString+i, nDSlen-i, "%s,%d.%d\r\n", XivelyCHMeteoWindSpeed,x,y);
+		i = i+cx;
+		
+		cx = snprintf (newDataString+i, nDSlen-i, "%s,%d\r\n", XivelyCHMeteoWindDir,WindDir);
+		i = i+cx;
+	}
+	
+SendDataRecordToXively();
+
+}
+
+ 
+  
+  
+//-----------------------------------------------------------------------
+// Get Valid Meteo Data and send it to xively (Part 2)
+//-----------------------------------------------------------------------
+
+void sendMeteoPart2DataToXively()
+
+{
+
+int x;
+int y;
+int z;
+
+int cx;
+int i;
+
+
+i=0;  // the index of the newDataString
+
+  
+// wind-gust speed in a day
+// ------------------------
+
+  if ((WindGustSpeedkmh < 990) && (WindGustSpeedkmh >= 0))
+	{
+		x=WindGustSpeedkmh/10;  //windspeed in 1/10 km/h
+						// so we have speed in km/h
+		y=WindGustSpeedkmh % 10; // y has one digit after komma
+		
+		cx = snprintf (newDataString+i, nDSlen-i, "%s,%d.%d\r\n", XivelyCHMeteoWindPeak,x,y);
+		i = i+cx;
+	}
+
+
+// Rain level in day
+// -----------------------------------------------------
+	
+	x=RainDay/100;  	 //rain level in 1/100 mm
+						// so we have now mm
+	y=(RainDay % 100)/10; // y has first digit after komma
+	
+	z=(RainDay % 10); 	// z has second digit after komma
+		
+		
+	cx = snprintf (newDataString+i, nDSlen-i, "%s,%d.%d%d\r\n", XivelyCHMeteoRainDay,x,y,z);
+	i = i+cx;
+		
+	
+// virtual wind generator 3 power
+// ------------------------------
+	
+	cx = snprintf (newDataString+i, nDSlen-i, "%s,%d\r\n", XivelyCHMeteoGenPower,Gen3Power);
+	i = i+cx;
+
+// virtual wind generator 3 power peak in day
+// ------------------------------------------
+	
+	cx = snprintf (newDataString+i, nDSlen-i, "%s,%d\r\n", XivelyCHMeteoGenPowerPeak,Gen3PowerPeakDay);
+	i = i+cx;
+	
+// virtual wind generator 3 Energy in day
+// ------------------------------------------
+
+	x=Gen3EnergyDay/10;  	 //generator 3 energy 1/10 kWh
+							// so we have now kWh
+	y=(Gen3EnergyDay % 10); // y has first digit after komma
+	
+	
+	
+	cx = snprintf (newDataString+i, nDSlen-i, "%s,%d.%d\r\n", XivelyCHMeteoGenEnergy,x,y);
+	i = i+cx;
+	
+// virtual wind generator 3 Energy toal produced
+// ------------------------------------------
+
+	x=Gen3Energy/10;  	 //generator 3 energy 1/10 kWh
+							// so we have now kWh
+	y=(Gen3Energy % 10); // y has first digit after komma
+	
+	
+	
+	cx = snprintf (newDataString+i, nDSlen-i, "%s,%d.%d\r\n", XivelyCHMeteoGenEnergyTot,x,y);
+	i = i+cx;
+
+// some arduino hw data, Meteo energy write cycles in EEPROM
+  
+	cx = snprintf (newDataString+i, nDSlen-i, "%s,%d\r\n", XivelyCHMeteoMeteoWriteCounter,MeteoEnergyWriteCounter);
+	i = i+cx;
+  
+	
+
+
+SendDataRecordToXively();
+
+}
+
+ 
   
 //-----------------------------------------------------------------------
 // Write Log Data to SD Card
@@ -467,6 +724,41 @@ logFile.close();
 }
 
 //-----------------------------------------------------------------------
+// Recover Wifi Network Setup
+//-----------------------------------------------------------------------
+
+void recoverEthernetCard()
+
+{
+ int statrec = WL_IDLE_STATUS;
+
+ 
+ WiFi.disconnect(); 
+ 
+ 
+ // Connect to WPA/WPA2 network. Change this line if using open or WEP network:    
+statrec = WiFi.begin(ssid, pass);
+
+if (statrec == WL_IDLE_STATUS) 
+      {
+        internetAvailable = false;
+        Serial.println("Network not available");
+      }
+      else 
+      {
+        // set the id adress of the shield
+	    // with netgear router here it works!
+	    WiFi.config(WiFiIP);
+		
+		internetConnFailCnt=0;				//reset the error counter
+		Serial.println("Network recovered");
+        printWifiStatus();
+      }
+
+
+}
+
+//-----------------------------------------------------------------------
 // Ethernet Stuff
 //-----------------------------------------------------------------------
 
@@ -487,15 +779,15 @@ void initEthernetCard()
 
   else
     {
-      if ( status != WL_CONNECTED)
+      // set the id adress of the shield
+	  // with netgear router doesn't work?
+	  // WiFi.config(WiFiIP);
+		
+	  if ( status != WL_CONNECTED)
       { 
         Serial.print("Attempting to connect to SSID: ");
         Serial.println(ssid);
 		
-		// set the id adress of the shield
-		// not possible with this library
-		// WiFi.config(WiFiIP);
-
         // Connect to WPA/WPA2 network. Change this line if using open or WEP network:    
         status = WiFi.begin(ssid, pass);
       }
@@ -507,7 +799,11 @@ void initEthernetCard()
       }
       else 
       {
-        internetConnFailCnt=0;				//reset the error counter
+        // set the id adress of the shield
+	    // with netgear router here it works!
+	    // WiFi.config(WiFiIP);
+		
+		internetConnFailCnt=0;				//reset the error counter
 		Serial.println("Network available");
         printWifiStatus();
       }
@@ -550,10 +846,14 @@ void SendDataRecordToXively()
   
     digitalWrite(DataLED, HIGH);  //Turns Data LED On
 	
-	delay(500);		//wait if there is a sd operation in the course
+	//delay(500);		//wait if there is a sd operation in the course
         
     sendData(newDataString);
-    
+
+//Test
+
+
+ 
   do {
   // if there's incoming data from the net connection.
   // send it out the serial port.  This is for debugging
@@ -578,7 +878,9 @@ void SendDataRecordToXively()
      Serial.println(freeRam()); 
 
   }
-    
+  
+     if (someOneIsHere()) displayData = true;  //check the state if the IR sensor
+	 
   } while (lastConnected && (millis() - lastConnectionTime < responseTimeout));
   
   if (lastConnected) 
@@ -591,7 +893,10 @@ void SendDataRecordToXively()
       }
 	  
    if (internetConnFailCnt > maxConnFail) initEthernetCard();  // try to connect to wireless router again
-      
+ 
+//test
+
+ 
     digitalWrite(DataLED, LOW);  //Turns Data LED Off
 
 }
@@ -626,6 +931,7 @@ void sendData(char thisData[])
     // here's the actual content of the PUT request:
     Serial.print(thisData);
 
+//test
 
 
 // if there's a successful connection:
@@ -670,6 +976,11 @@ if (client.connect(server, 80))
     }
   // note the time that the connection was made or attempted:
   lastConnectionTime = millis();
+  
+  
+
+//test
+  
 }
     
 
